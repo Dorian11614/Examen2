@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Restaurante - Órdenes</title>
+  <style>
+    :root { --bg:#0b0c10; --card:#15171c; --fg:#e5e7eb; --muted:#9aa0a6; --acc:#22c55e; --warn:#fbbf24; --info:#60a5fa; --danger:#ef4444; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .wrap{max-width:980px;margin:32px auto;padding:0 16px}
+    .card{background:var(--card);border:1px solid #22242a;border-radius:16px;padding:18px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+    h1,h2{margin:0 0 12px} h1{font-size:22px} h2{font-size:18px;color:var(--muted)}
+    .row{display:grid;gap:16px}
+    @media(min-width:880px){.row{grid-template-columns:1.1fr 1fr}}
+    label{display:block;font-size:12px;margin:10px 0 6px;color:var(--muted)}
+    input,textarea,select{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2a2d35;background:#0f1116;color:var(--fg);outline:none}
+    input:focus,textarea:focus{border-color:#3b82f6}
+    button{border:0;border-radius:12px;padding:10px 14px;font-weight:600;cursor:pointer}
+    .btn{background:#3b82f6;color:white} .btn:hover{filter:brightness(1.05)}
+    .btn-outline{background:transparent;border:1px solid #3b82f6;color:#3b82f6}
+    .btn-danger{background:var(--danger);color:#fff}
+    .badge{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid #2a2d35}
+    .b-pending{background:#1f2937;color:#fbbf24;border-color:#3b3f4a}
+    .b-preparing{background:#1f2937;color:#60a5fa;border-color:#3b3f4a}
+    .b-delivered{background:#1f2937;color:#22c55e;border-color:#3b3f4a}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:10px;border-bottom:1px solid #23262d;text-align:left;font-size:14px}
+    thead th{color:#aeb3bb;font-weight:700}
+    .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .muted{color:var(--muted)}
+    .stack{display:flex;gap:10px;flex-wrap:wrap}
+    .hidden{display:none !important}
+    .help{font-size:12px;color:#94a3b8;margin-top:6px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>🍽️ Restaurante – Órdenes</h1>
+      <div id="userBox" class="stack hidden">
+        <span class="muted">Conectado como</span>
+        <strong id="userName"></strong>
+        <button id="btnLogout" class="btn-outline">Salir</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- Autenticación / Registro -->
+      <section class="card">
+        <h2>Acceso de cliente</h2>
+        <p class="help">Usa el mismo formulario para <b>registrarte</b> o para <b>iniciar sesión</b>.</p>
+        <form id="formAuth">
+          <label>Nombre</label>
+          <input id="authNombre" placeholder="Nombre completo" required />
+
+          <label>Email</label>
+          <input id="authEmail" type="email" placeholder="correo@ejemplo.com" required />
+
+          <label>Teléfono</label>
+          <input id="authTel" placeholder="Ej. 55551234" required />
+
+          <div class="stack" style="margin-top:12px">
+            <button type="submit" class="btn">Registrarme / Iniciar sesión</button>
+            <button type="button" id="btnDemo" class="btn-outline">Autofill demo</button>
+          </div>
+          <div id="authMsg" class="help"></div>
+        </form>
+      </section>
+
+      <!-- Nueva orden -->
+      <section class="card">
+        <h2>Nueva orden</h2>
+        <form id="formOrden">
+          <label>Platillo</label>
+          <input id="ordenPlatillo" placeholder="Ej. Pizza Margarita" required />
+
+          <label>Notas</label>
+          <textarea id="ordenNotas" rows="3" placeholder="Sin queso, bebida aparte…"></textarea>
+
+          <div class="stack" style="margin-top:12px">
+            <button type="submit" class="btn">Crear orden</button>
+            <button type="button" id="btnFake" class="btn-outline">Cargar demo</button>
+          </div>
+          <div id="ordenMsg" class="help"></div>
+        </form>
+      </section>
+    </div>
+
+    <!-- Lista de órdenes -->
+    <section class="card" style="margin-top:16px">
+      <div class="topbar">
+        <h2>Mis órdenes</h2>
+        <span id="countBox" class="muted">0 registros</span>
+      </div>
+      <div class="help">Pulsa <b>Avanzar estado</b> para pasar de <i>pending</i> → <i>preparing</i> → <i>delivered</i>.</div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Platillo</th>
+            <th>Notas</th>
+            <th>Estado</th>
+            <th>Creado</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyOrders">
+          <tr><td colspan="6" class="muted">Inicia sesión para ver tus órdenes…</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <p class="help" style="margin-top:14px">
+      Backend: <code id="apiInfo"></code>
+    </p>
+  </div>
+
+  <script>
+    // === CONFIG ===
+    // Cambia esto a tu URL del backend en Render:
+    const API_BASE = "https://examen2-tdxa.onrender.com"; // <-- AJÚSTALO SI ES NECESARIO
+
+    document.getElementById('apiInfo').textContent = API_BASE;
+
+    // === Estado simple en localStorage ===
+    const store = {
+      set(k,v){ localStorage.setItem(k, JSON.stringify(v)); },
+      get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+      del(k){ localStorage.removeItem(k); }
+    };
+
+    const authForm = document.getElementById('formAuth');
+    const formOrden = document.getElementById('formOrden');
+    const tbody = document.getElementById('tbodyOrders');
+    const countBox = document.getElementById('countBox');
+    const userBox = document.getElementById('userBox');
+    const userName = document.getElementById('userName');
+    const btnLogout = document.getElementById('btnLogout');
+    const authMsg = document.getElementById('authMsg');
+    const ordenMsg = document.getElementById('ordenMsg');
+    const btnDemo = document.getElementById('btnDemo');
+    const btnFake = document.getElementById('btnFake');
+
+    const nextState = (s) => s === 'pending' ? 'preparing' : (s === 'preparing' ? 'delivered' : 'delivered');
+
+    const api = async (path, opts={}) => {
+      const url = API_BASE + path;
+      const res = await fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        ...opts
+      });
+      if(!res.ok){
+        const msg = await res.text().catch(()=>res.statusText);
+        throw new Error(msg || res.statusText);
+      }
+      return res.headers.get("content-type")?.includes("application/json") ? res.json() : res.text();
+    };
+
+    function setLoggedIn(c){
+      if(c){
+        store.set('cliente', c);
+        userName.textContent = c.nombre + " (#" + c.id + ")";
+        userBox.classList.remove('hidden');
+      }else{
+        store.del('cliente');
+        userBox.classList.add('hidden');
+        userName.textContent = '';
+      }
+    }
+
+    async function loadOrders(){
+      const c = store.get('cliente');
+      if(!c){ 
+        tbody.innerHTML = `<tr><td colspan="6" class="muted">Inicia sesión para ver tus órdenes…</td></tr>`;
+        countBox.textContent = "0 registros";
+        return;
+      }
+      try{
+        const list = await api(`/ordenes/cliente/${c.id}`);
+        if(list.length === 0){
+          tbody.innerHTML = `<tr><td colspan="6" class="muted">Sin órdenes aún.</td></tr>`;
+        }else{
+          tbody.innerHTML = list.map((o,idx)=>`
+            <tr>
+              <td>${idx+1}</td>
+              <td>${o.platillo_nombre}</td>
+              <td>${o.notas ?? ""}</td>
+              <td>
+                <span class="badge ${o.estado==='pending'?'b-pending':o.estado==='preparing'?'b-preparing':'b-delivered'}">
+                  ${o.estado}
+                </span>
+              </td>
+              <td>${new Date(o.creado).toLocaleString()}</td>
+              <td>
+                <button class="btn" data-advance="${o.id}" ${o.estado==='delivered'?'disabled':''}>
+                  Avanzar estado
+                </button>
+              </td>
+            </tr>
+          `).join('');
+        }
+        countBox.textContent = `${list.length} registro${list.length!==1?'s':''}`;
+      }catch(e){
+        tbody.innerHTML = `<tr><td colspan="6" class="muted">Error cargando órdenes.</td></tr>`;
+        console.error(e);
+      }
+    }
+
+    // === Eventos ===
+    authForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      authMsg.textContent = "Procesando…";
+      const nombre = document.getElementById('authNombre').value.trim();
+      const email  = document.getElementById('authEmail').value.trim();
+      const tel    = document.getElementById('authTel').value.trim();
+
+      try{
+        // 1) Intentar login
+        let me;
+        try{
+          me = await api('/clientes/login', { method:'POST', body: JSON.stringify({ email, telefono: tel }) });
+        }catch(_){
+          // 2) Si no existe, registrar
+          me = await api('/clientes/registrar', { method:'POST', body: JSON.stringify({ nombre, email, telefono: tel }) });
+        }
+        setLoggedIn(me);
+        authMsg.textContent = "Listo ✅";
+        loadOrders();
+      }catch(err){
+        authMsg.textContent = "Error: " + err.message;
+      }
+    });
+
+    btnLogout.addEventListener('click', ()=>{
+      setLoggedIn(null);
+      loadOrders();
+    });
+
+    formOrden.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      ordenMsg.textContent = "";
+      const c = store.get('cliente');
+      if(!c){ ordenMsg.textContent = "Primero inicia sesión."; return; }
+
+      const platillo = document.getElementById('ordenPlatillo').value.trim();
+      const notas    = document.getElementById('ordenNotas').value.trim();
+
+      try{
+        await api('/ordenes', { method:'POST', body: JSON.stringify({ cliente_id: c.id, platillo_nombre: platillo, notas }) });
+        ordenMsg.textContent = "Orden creada ✅";
+        formOrden.reset();
+        loadOrders();
+      }catch(err){
+        ordenMsg.textContent = "Error: " + err.message;
+      }
+    });
+
+    tbody.addEventListener('click', async (e)=>{
+      const btn = e.target.closest('button[data-advance]');
+      if(!btn) return;
+      const id = btn.getAttribute('data-advance');
+      // Obtener estado actual leyendo la fila
+      const row = btn.closest('tr');
+      const stateText = row.querySelector('.badge').textContent.trim();
+      const nxt = nextState(stateText);
+
+      try{
+        await api(`/ordenes/${id}/estado`, { method:'PUT', body: JSON.stringify({ estado: nxt }) });
+        loadOrders();
+      }catch(err){
+        alert("No se pudo actualizar: " + err.message);
+      }
+    });
+
+    // Demo helpers
+    btnDemo.addEventListener('click', ()=>{
+      const r = Math.floor(1000+Math.random()*9000);
+      document.getElementById('authNombre').value = "Cliente " + r;
+      document.getElementById('authEmail').value  = `cliente${r}@mail.com`;
+      document.getElementById('authTel').value    = "5555" + r;
+    });
+
+    btnFake.addEventListener('click', ()=>{
+      document.getElementById('ordenPlatillo').value = "Taco al Pastor";
+      document.getElementById('ordenNotas').value = "Con piña 🍍";
+    });
+
+    // Init
+    (function(){
+      const c = store.get('cliente');
+      if(c){ setLoggedIn(c); }
+      loadOrders();
+    })();
+  </script>
+</body>
+</html>
