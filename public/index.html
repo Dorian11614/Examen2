@@ -111,16 +111,15 @@
     </section>
 
     <p class="help" style="margin-top:14px">
-      Backend: <code id="apiInfo"></code>
+      API base: <code id="apiInfo"></code>
     </p>
   </div>
 
   <script>
     // === CONFIG ===
-    // Cambia esto a tu URL del backend en Render:
-    const API_BASE = "https://examen2-tdxa.onrender.com"; // <-- AJÚSTALO SI ES NECESARIO
-
-    document.getElementById('apiInfo').textContent = API_BASE;
+    // Misma-origen (backend y frontend en la misma URL):
+    const API_BASE = ""; // <= importante: sin URL absoluta
+    document.getElementById('apiInfo').textContent = (API_BASE || "(same-origin)") + "  /clientes  /ordenes";
 
     // === Estado simple en localStorage ===
     const store = {
@@ -144,16 +143,19 @@
     const nextState = (s) => s === 'pending' ? 'preparing' : (s === 'preparing' ? 'delivered' : 'delivered');
 
     const api = async (path, opts={}) => {
-      const url = API_BASE + path;
+      const url = (API_BASE || "") + path;
       const res = await fetch(url, {
         headers: { "Content-Type": "application/json" },
         ...opts
       });
       if(!res.ok){
-        const msg = await res.text().catch(()=>res.statusText);
-        throw new Error(msg || res.statusText);
+        let msg = "";
+        try { const j = await res.json(); msg = j?.error || res.statusText; }
+        catch { msg = await res.text().catch(()=>res.statusText); }
+        throw new Error(msg || "Error en la solicitud");
       }
-      return res.headers.get("content-type")?.includes("application/json") ? res.json() : res.text();
+      const ct = res.headers.get("content-type") || "";
+      return ct.includes("application/json") ? res.json() : res.text();
     };
 
     function setLoggedIn(c){
@@ -177,31 +179,32 @@
       }
       try{
         const list = await api(`/ordenes/cliente/${c.id}`);
-        if(list.length === 0){
+        if(!Array.isArray(list) || list.length === 0){
           tbody.innerHTML = `<tr><td colspan="6" class="muted">Sin órdenes aún.</td></tr>`;
-        }else{
-          tbody.innerHTML = list.map((o,idx)=>`
-            <tr>
-              <td>${idx+1}</td>
-              <td>${o.platillo_nombre}</td>
-              <td>${o.notas ?? ""}</td>
-              <td>
-                <span class="badge ${o.estado==='pending'?'b-pending':o.estado==='preparing'?'b-preparing':'b-delivered'}">
-                  ${o.estado}
-                </span>
-              </td>
-              <td>${new Date(o.creado).toLocaleString()}</td>
-              <td>
-                <button class="btn" data-advance="${o.id}" ${o.estado==='delivered'?'disabled':''}>
-                  Avanzar estado
-                </button>
-              </td>
-            </tr>
-          `).join('');
+          countBox.textContent = "0 registros";
+          return;
         }
+        tbody.innerHTML = list.map((o,idx)=>`
+          <tr>
+            <td>${idx+1}</td>
+            <td>${o.platillo_nombre}</td>
+            <td>${o.notas ?? ""}</td>
+            <td>
+              <span class="badge ${o.estado==='pending'?'b-pending':o.estado==='preparing'?'b-preparing':'b-delivered'}">
+                ${o.estado}
+              </span>
+            </td>
+            <td>${o.creado ? new Date(o.creado).toLocaleString() : ""}</td>
+            <td>
+              <button class="btn" data-advance="${o.id}" ${o.estado==='delivered'?'disabled':''}>
+                Avanzar estado
+              </button>
+            </td>
+          </tr>
+        `).join('');
         countBox.textContent = `${list.length} registro${list.length!==1?'s':''}`;
       }catch(e){
-        tbody.innerHTML = `<tr><td colspan="6" class="muted">Error cargando órdenes.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="muted">Error cargando órdenes: ${e.message}</td></tr>`;
         console.error(e);
       }
     }
@@ -294,3 +297,4 @@
   </script>
 </body>
 </html>
+
